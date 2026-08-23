@@ -1,7 +1,6 @@
 package com.stockpulse.event;
 
 import com.stockpulse.commerce.CommerceEngineService;
-import com.stockpulse.product.Product;
 import com.stockpulse.product.ProductRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

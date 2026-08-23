@@ -37,13 +37,33 @@ public class AICommerceAdvisor implements CommerceAdvisor {
         try {
             String prompt = promptBuilder.build(product, trigger);
             String raw = llmGateway.call(prompt);
-            CommerceRecommendation recommendation = parser.parse(raw);
+            AIResponseParser.CommerceRecommendation parsed = parser.parse(raw);
+            CommerceRecommendation recommendation = toCommerceRecommendation(parsed);
             validator.validate(recommendation, product.getCurrentPrice());
             return recommendation;
         } catch (Exception e) {
             log.warn("AI advisor failed for product {} ({}), falling back to rule-based: {}",
-                    product.getProductId(), trigger.getReason(), e.getMessage());
+                    product, trigger, e.getMessage());
             return fallback.advise(product, trigger);
+        }
+    }
+
+    private CommerceRecommendation toCommerceRecommendation(AIResponseParser.CommerceRecommendation parsed) {
+        try {
+            for (java.lang.reflect.Constructor<?> constructor : CommerceRecommendation.class.getConstructors()) {
+                java.lang.reflect.Parameter[] parameters = constructor.getParameters();
+                java.lang.reflect.RecordComponent[] components = parsed.getClass().getRecordComponents();
+                if (components != null && parameters.length == components.length) {
+                    Object[] values = new Object[components.length];
+                    for (int i = 0; i < components.length; i++) {
+                        values[i] = components[i].getAccessor().invoke(parsed);
+                    }
+                    return (CommerceRecommendation) constructor.newInstance(values);
+                }
+            }
+            throw new IllegalStateException("No compatible CommerceRecommendation constructor");
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("Unable to convert AI recommendation", e);
         }
     }
 }

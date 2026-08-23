@@ -28,22 +28,24 @@ public class SuggestionService {
     }
 
     @Transactional
-    public PricingSuggestion decidePricing(Long id, boolean accept) {
-        PricingSuggestion suggestion = pricingSuggestionRepository.findById(id)
-                .orElseThrow(() -> new NoSuchElementException("Pricing suggestion not found: " + id));
-        requirePending(suggestion.getStatus());
+public PricingSuggestion decidePricing(Long id, boolean accept) {
+    PricingSuggestion suggestion = pricingSuggestionRepository.findById(id)
+            .orElseThrow(() -> new NoSuchElementException("Pricing suggestion not found: " + id));
+    requirePending(suggestion.getStatus());
 
-        if (accept) {
-            Product product = suggestion.getProduct();
-            product.applyPriceChange(suggestion.getRecommendedPrice());
-            clearPriceReviewIfNoOtherPendingPricing(product);
-            productRepository.save(product);
-            suggestion.setStatus(SuggestionStatus.ACCEPTED);
-        } else {
-            suggestion.setStatus(SuggestionStatus.REJECTED);
-        }
+    if (accept) {
+        Product product = suggestion.getProduct();
+        product.applyPriceChange(suggestion.getRecommendedPrice());
+        suggestion.setStatus(SuggestionStatus.ACCEPTED);
+        pricingSuggestionRepository.save(suggestion);
+        clearPriceReviewIfNoOtherPendingPricing(product);
+        productRepository.save(product);
+        return suggestion;
+    } else {
+        suggestion.setStatus(SuggestionStatus.REJECTED);
         return pricingSuggestionRepository.save(suggestion);
     }
+}
 
     @Transactional
     public ReorderSuggestion decideReorder(Long id, boolean accept) {

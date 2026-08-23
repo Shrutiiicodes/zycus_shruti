@@ -9,8 +9,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * OpenAI-compatible chat completions call. If your Qwen endpoint's auth header,
- * path, or response shape differs, this is the only method that needs to change.
+ * OpenAI-compatible chat completions call against the Zycus LiteLLM gateway.
+ * Two non-standard headers required beyond Bearer auth: "product" and "Cookie".
  */
 @Component("qwen")
 public class QwenLLMGateway implements LLMGateway {
@@ -21,6 +21,10 @@ public class QwenLLMGateway implements LLMGateway {
     private String model;
     @Value("${llm.base-url}")
     private String baseUrl;
+    @Value("${llm.product-header:}")
+    private String productHeader;
+    @Value("${llm.cookie:}")
+    private String cookie;
 
     private final RestClient http = RestClient.builder()
             .requestFactory(clientRequestFactory())
@@ -31,14 +35,22 @@ public class QwenLLMGateway implements LLMGateway {
     public String call(String prompt) {
         Map<String, Object> body = Map.of(
                 "model", model,
-                "messages", List.of(Map.of("role", "user", "content", prompt)),
-                "temperature", 0.3
+                "messages", List.of(Map.of("role", "user", "content", prompt))
         );
 
-        Map<String, Object> response = http.post()
+        RestClient.RequestBodySpec request = http.post()
                 .uri(baseUrl + "/chat/completions")
                 .header("Authorization", "Bearer " + apiKey)
-                .header("Content-Type", "application/json")
+                .header("Content-Type", "application/json");
+
+        if (!productHeader.isBlank()) {
+            request = request.header("product", productHeader);
+        }
+        if (!cookie.isBlank()) {
+            request = request.header("Cookie", cookie);
+        }
+
+        Map<String, Object> response = request
                 .body(body)
                 .retrieve()
                 .body(Map.class);

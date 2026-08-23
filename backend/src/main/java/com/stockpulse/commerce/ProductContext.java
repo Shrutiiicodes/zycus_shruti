@@ -6,7 +6,6 @@ import lombok.Getter;
 
 import java.math.BigDecimal;
 
-/** Read-only snapshot of a product handed to any CommerceAdvisor. */
 @Getter
 @Builder
 public class ProductContext {

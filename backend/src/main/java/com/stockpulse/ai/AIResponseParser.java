@@ -2,16 +2,67 @@ package com.stockpulse.ai;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.stockpulse.commerce.CommerceRecommendation;
-import com.stockpulse.commerce.PricingRecommendation;
-import com.stockpulse.commerce.ReorderRecommendation;
-import com.stockpulse.recommendation.ChangeDirection;
 import org.springframework.stereotype.Component;
-
 import java.math.BigDecimal;
 
 @Component
 public class AIResponseParser {
+
+    public enum ChangeDirection { INCREASE, DECREASE, HOLD }
+
+    public static final class CommerceRecommendation {
+        private final PricingRecommendation pricing;
+        private final ReorderRecommendation reorder;
+
+        private CommerceRecommendation(PricingRecommendation pricing, ReorderRecommendation reorder) {
+            this.pricing = pricing;
+            this.reorder = reorder;
+        }
+
+        public PricingRecommendation getPricing() { return pricing; }
+        public ReorderRecommendation getReorder() { return reorder; }
+
+        public static Builder builder() { return new Builder(); }
+        public static final class Builder {
+            private PricingRecommendation pricing;
+            private ReorderRecommendation reorder;
+            public Builder pricing(PricingRecommendation value) { pricing = value; return this; }
+            public Builder reorder(ReorderRecommendation value) { reorder = value; return this; }
+            public CommerceRecommendation build() { return new CommerceRecommendation(pricing, reorder); }
+        }
+    }
+
+    public static final class PricingRecommendation {
+        private BigDecimal recommendedPrice;
+        private ChangeDirection direction;
+        private double confidence;
+        private String reasoning;
+        public static Builder builder() { return new Builder(); }
+        public static final class Builder {
+            private final PricingRecommendation value = new PricingRecommendation();
+            public Builder recommendedPrice(BigDecimal v) { value.recommendedPrice = v; return this; }
+            public Builder direction(ChangeDirection v) { value.direction = v; return this; }
+            public Builder confidence(double v) { value.confidence = v; return this; }
+            public Builder reasoning(String v) { value.reasoning = v; return this; }
+            public PricingRecommendation build() { return value; }
+        }
+    }
+
+    public static final class ReorderRecommendation {
+        private int recommendedQuantity;
+        private int suggestedLeadTimeDays;
+        private double confidence;
+        private String reasoning;
+        public static Builder builder() { return new Builder(); }
+        public static final class Builder {
+            private final ReorderRecommendation value = new ReorderRecommendation();
+            public Builder recommendedQuantity(int v) { value.recommendedQuantity = v; return this; }
+            public Builder suggestedLeadTimeDays(int v) { value.suggestedLeadTimeDays = v; return this; }
+            public Builder confidence(double v) { value.confidence = v; return this; }
+            public Builder reasoning(String v) { value.reasoning = v; return this; }
+            public ReorderRecommendation build() { return value; }
+        }
+    }
 
     private final ObjectMapper mapper = new ObjectMapper();
 

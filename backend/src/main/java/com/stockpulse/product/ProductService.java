@@ -1,13 +1,14 @@
 package com.stockpulse.product;
 
 import com.stockpulse.commerce.CommerceEngineService;
+import com.stockpulse.event.ProductSignalEvent;
 import com.stockpulse.product.dto.CreateProductRequest;
 import com.stockpulse.recommendation.PricingSuggestion;
 import com.stockpulse.recommendation.ReorderSuggestion;
 import com.stockpulse.recommendation.TriggerReason;
-import org.springframework.stereotype.Service;
-import com.stockpulse.event.ProductSignalEvent;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.stereotype.Service;
+
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
@@ -21,7 +22,10 @@ public class ProductService {
     private final ApplicationEventPublisher eventPublisher;
     private final TriggerEvaluator triggerEvaluator;
 
-    public ProductService(ProductRepository productRepository, CommerceEngineService commerceEngineService, ApplicationEventPublisher eventPublisher, TriggerEvaluator triggerEvaluator) {
+    public ProductService(ProductRepository productRepository,
+                           CommerceEngineService commerceEngineService,
+                           ApplicationEventPublisher eventPublisher,
+                           TriggerEvaluator triggerEvaluator) {
         this.productRepository = productRepository;
         this.commerceEngineService = commerceEngineService;
         this.eventPublisher = eventPublisher;
@@ -61,7 +65,6 @@ public class ProductService {
                 .orElseThrow(() -> new NoSuchElementException("Product not found: " + id));
     }
 
-    /** Phase 2: synchronous stock update, no event firing yet (added in Phase 4). */
     public Product updateStock(String id, int newStockLevel) {
         Product product = get(id);
         if (newStockLevel > product.getStockLevel()) {
@@ -72,9 +75,8 @@ public class ProductService {
         Product saved = productRepository.save(product);
         publishTriggers(saved);
         return saved;
-}
+    }
 
-    /** Phase 2: synchronous order simulation, no event firing yet (added in Phase 4). */
     public Product placeOrder(String id, int quantity) {
         Product product = get(id);
         product.decrementStock(quantity);
@@ -82,7 +84,7 @@ public class ProductService {
         Product saved = productRepository.save(product);
         publishTriggers(saved);
         return saved;
-}
+    }
 
     public PricingSuggestion suggestPricingOnDemand(String id) {
         Product product = get(id);
@@ -99,8 +101,8 @@ public class ProductService {
     }
 
     private void publishTriggers(Product product) {
-    for (TriggerReason reason : triggerEvaluator.evaluate(product)) {
-        eventPublisher.publishEvent(new ProductSignalEvent(product.getId(), reason));
+        for (TriggerReason reason : triggerEvaluator.evaluate(product)) {
+            eventPublisher.publishEvent(new ProductSignalEvent(product.getId(), reason));
+        }
     }
-}
 }

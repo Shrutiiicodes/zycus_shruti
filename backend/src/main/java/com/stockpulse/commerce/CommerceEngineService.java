@@ -4,7 +4,6 @@ import com.stockpulse.product.Product;
 import com.stockpulse.product.ProductRepository;
 import com.stockpulse.recommendation.*;
 
-import org.springframework.scheduling.TriggerContext;
 import org.springframework.stereotype.Service;
 
 import java.util.List;

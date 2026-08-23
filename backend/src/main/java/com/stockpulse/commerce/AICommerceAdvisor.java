@@ -4,16 +4,15 @@ import com.stockpulse.ai.AIResponseParser;
 import com.stockpulse.ai.AIResponseValidator;
 import com.stockpulse.ai.LLMGateway;
 import com.stockpulse.ai.PromptBuilder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
-/**
- * AI implementation of the shared contract. On ANY failure — timeout, malformed
- * JSON, quota error, out-of-bounds values — falls back to the full rule-based
- * pair (never a partial/silent-drop result), per the unified-contract decision.
- */
 @Component("ai")
 public class AICommerceAdvisor implements CommerceAdvisor {
+
+    private static final Logger log = LoggerFactory.getLogger(AICommerceAdvisor.class);
 
     private final LLMGateway llmGateway;
     private final PromptBuilder promptBuilder;
@@ -42,6 +41,8 @@ public class AICommerceAdvisor implements CommerceAdvisor {
             validator.validate(recommendation, product.getCurrentPrice());
             return recommendation;
         } catch (Exception e) {
+            log.warn("AI advisor failed for product {} ({}), falling back to rule-based: {}",
+                    product.getProductId(), trigger.getReason(), e.getMessage());
             return fallback.advise(product, trigger);
         }
     }

@@ -3,6 +3,8 @@ package com.stockpulse.commerce;
 import com.stockpulse.product.Product;
 import com.stockpulse.product.ProductRepository;
 import com.stockpulse.recommendation.*;
+
+import org.springframework.scheduling.TriggerContext;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -61,6 +63,10 @@ public class CommerceEngineService {
                     .triggerReason(reason)
                     .build());
             result.pricing = Optional.of(saved);
+            if (product.getStatus() == com.stockpulse.product.ProductStatus.ACTIVE) {
+                product.setStatus(com.stockpulse.product.ProductStatus.PRICE_REVIEW_PENDING);
+                productRepository.save(product);
+            }
         }
 
         boolean reorderPending = reorderSuggestionRepository

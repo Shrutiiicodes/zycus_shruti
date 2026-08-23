@@ -1,31 +1,39 @@
 package com.stockpulse.recommendation;
 
+import com.stockpulse.product.Product;
 import jakarta.persistence.*;
 import lombok.*;
+
 import java.time.Instant;
 
 @Entity
 @Table(name = "reorder_suggestions")
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class ReorderSuggestion {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
-    private String productId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "product_id", nullable = false)
+    private Product product;
 
     @Column(nullable = false)
-    private Integer currentStock;
+    private int currentStock;
 
     @Column(nullable = false)
-    private Integer recommendedQuantity;
-
-    private Integer suggestedLeadTimeDays;
+    private int recommendedQuantity;
 
     @Column(nullable = false)
-    private Double confidence;
+    private int suggestedLeadTimeDays;
+
+    @Column(nullable = false)
+    private double confidence;
 
     @Column(length = 2000)
     private String reasoning;

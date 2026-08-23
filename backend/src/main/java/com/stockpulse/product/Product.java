@@ -1,12 +1,20 @@
 package com.stockpulse.product;
 
 import jakarta.persistence.*;
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
 import java.math.BigDecimal;
 
 @Entity
 @Table(name = "products")
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class Product {
 
     @Id
@@ -26,25 +34,40 @@ public class Product {
     private BigDecimal currentPrice;
 
     @Column(nullable = false)
-    private Integer stockLevel;
+    private int stockLevel;
 
     @Column(nullable = false)
-    private Integer reorderThreshold;
+    private int reorderThreshold;
 
+    /** Orders placed in the last 24h — bumped by /orders, read by rule + AI strategies. */
     @Column(nullable = false)
-    private Integer demandVelocity;
+    private int demandVelocity;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private ProductStatus status;
 
-    // --- Sprint 2 extension placeholders — nullable, unused today ---
+    // --- Sprint 2 extension points — nullable, unused today ---
     private BigDecimal costPrice;
     private String supplierId;
 
-    /** Recomputes status from stock; call after any stock mutation. */
-    public void refreshStatus() {
-        if (stockLevel != null && stockLevel == 0) {
+    public void applyPriceChange(BigDecimal newPrice) {
+        this.currentPrice = newPrice;
+    }
+
+    public void receiveStock(int quantity) {
+        this.stockLevel += quantity;
+        recomputeLifecycleFromStock();
+    }
+
+    public void decrementStock(int quantity) {
+        this.stockLevel = Math.max(0, this.stockLevel - quantity);
+        recomputeLifecycleFromStock();
+    }
+
+    /** OUT_OF_STOCK is derived from stock, never set directly by callers. */
+    public void recomputeLifecycleFromStock() {
+        if (this.stockLevel == 0) {
             this.status = ProductStatus.OUT_OF_STOCK;
         } else if (this.status == ProductStatus.OUT_OF_STOCK) {
             this.status = ProductStatus.ACTIVE;
@@ -52,6 +75,6 @@ public class Product {
     }
 
     public boolean isBelowReorderThreshold() {
-        return stockLevel != null && reorderThreshold != null && stockLevel < reorderThreshold;
+        return this.stockLevel < this.reorderThreshold;
     }
 }

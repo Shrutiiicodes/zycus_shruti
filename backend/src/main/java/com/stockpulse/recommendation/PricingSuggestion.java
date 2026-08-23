@@ -1,21 +1,28 @@
 package com.stockpulse.recommendation;
 
+import com.stockpulse.product.Product;
 import jakarta.persistence.*;
 import lombok.*;
+
 import java.math.BigDecimal;
 import java.time.Instant;
 
 @Entity
 @Table(name = "pricing_suggestions")
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class PricingSuggestion {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
-    private String productId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "product_id", nullable = false)
+    private Product product;
 
     @Column(nullable = false)
     private BigDecimal currentPrice;
@@ -28,7 +35,7 @@ public class PricingSuggestion {
     private ChangeDirection direction;
 
     @Column(nullable = false)
-    private Double confidence;
+    private double confidence;
 
     @Column(length = 2000)
     private String reasoning;

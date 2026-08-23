@@ -1,9 +1,11 @@
 package com.stockpulse.ai;
 
+import java.math.BigDecimal;
+
+import org.springframework.stereotype.Component;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.stereotype.Component;
-import java.math.BigDecimal;
 
 @Component
 public class AIResponseParser {

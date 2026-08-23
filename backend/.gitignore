@@ -1,0 +1,30 @@
+# Maven build output
+/target/
+
+# Maven wrapper artifacts
+.mvn/timing.properties
+
+# IDE metadata
+.idea/
+*.iml
+.classpath
+.project
+.settings/
+.vscode/
+
+# Java tooling
+*.class
+hs_err_pid*
+
+# Logs and local runtime files
+*.log
+*.pid
+
+# Local environment overrides
+.env
+.env.*
+application-local.properties
+
+# Operating system files
+.DS_Store
+Thumbs.db

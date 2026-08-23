@@ -1,4 +1,3 @@
--- Seed data will be added with the product model.
 INSERT INTO products (id, sku, name, category, current_price, stock_level, reorder_threshold, demand_velocity, status) VALUES
   ('PRD-001', 'SKU-ELEC-001', 'Wireless Earbuds Pro',   'ELECTRONICS', 79.99, 45,  20, 3,  'ACTIVE'),
   ('PRD-002', 'SKU-ELEC-002', 'USB-C Hub 7-Port',       'ELECTRONICS', 34.99, 120, 30, 1,  'ACTIVE'),

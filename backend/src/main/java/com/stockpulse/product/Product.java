@@ -48,12 +48,34 @@ public class Product {
     @Column(nullable = false)
     private ProductStatus status;
 
-    // --- Sprint 2 extension points — nullable, unused today ---
+    @Version
+    private Long version;
+
+    // --- Production Operational & Reorder Fields ---
     private BigDecimal costPrice;
     private String supplierId;
 
+    @Builder.Default
+    @Column(columnDefinition = "int default 7")
+    private int leadTimeDays = 7;
+
+    @Builder.Default
+    @Column(columnDefinition = "int default 10")
+    private int safetyStock = 10;
+
+    @Builder.Default
+    @Column(columnDefinition = "int default 0")
+    private int incomingStock = 0;
+
+    @Builder.Default
+    @Column(columnDefinition = "int default 25")
+    private int minimumOrderQuantity = 25;
+
+    private java.time.Instant lastPriceChangeTimestamp;
+
     public void applyPriceChange(BigDecimal newPrice) {
         this.currentPrice = newPrice;
+        this.lastPriceChangeTimestamp = java.time.Instant.now();
     }
 
     public void receiveStock(int quantity) {

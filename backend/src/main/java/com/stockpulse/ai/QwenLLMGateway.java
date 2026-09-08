@@ -55,6 +55,10 @@ public class QwenLLMGateway implements LLMGateway {
                 .retrieve()
                 .body(Map.class);
 
+        if (response == null || !response.containsKey("choices")) {
+            throw new IllegalStateException("Empty or malformed response from LLM gateway");
+        }
+
         List<Map<String, Object>> choices = (List<Map<String, Object>>) response.get("choices");
         Map<String, Object> message = (Map<String, Object>) choices.get(0).get("message");
         return (String) message.get("content");

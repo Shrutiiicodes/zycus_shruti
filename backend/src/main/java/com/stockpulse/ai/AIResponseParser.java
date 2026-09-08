@@ -34,6 +34,7 @@ public class AIResponseParser {
         }
     }
 
+    @lombok.Getter
     public static final class PricingRecommendation {
         private BigDecimal recommendedPrice;
         private ChangeDirection direction;
@@ -50,6 +51,7 @@ public class AIResponseParser {
         }
     }
 
+    @lombok.Getter
     public static final class ReorderRecommendation {
         private int recommendedQuantity;
         private int suggestedLeadTimeDays;

@@ -28,5 +28,19 @@ export const api = {
   decidePricing: (id, decision) =>
     request(`/pricing-suggestions/${id}`, { method: 'PATCH', body: JSON.stringify({ decision }) }),
   decideReorder: (id, decision) =>
-    request(`/reorder-suggestions/${id}`, { method: 'PATCH', body: JSON.stringify({ decision }) })
+    request(`/reorder-suggestions/${id}`, { method: 'PATCH', body: JSON.stringify({ decision }) }),
+
+  // Purchase Order & Fulfillment Endpoints
+  listPurchaseOrders: (productId = '') =>
+    request(`/purchase-orders${productId ? `?productId=${productId}` : ''}`),
+  receiveShipment: (id) =>
+    request(`/purchase-orders/${id}/receive`, { method: 'PATCH' }),
+
+  // Audit Logs Endpoints
+  getPriceHistory: (productId = '') =>
+    request(`/audit/price-history${productId ? `?productId=${productId}` : ''}`),
+  getInventoryTransactions: (productId = '') =>
+    request(`/audit/inventory-transactions${productId ? `?productId=${productId}` : ''}`),
+  getRecommendationAudits: (productId = '') =>
+    request(`/audit/recommendations${productId ? `?productId=${productId}` : ''}`)
 };

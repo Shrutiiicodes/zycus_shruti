@@ -4,11 +4,25 @@ import com.stockpulse.ai.AIResponseParser;
 import com.stockpulse.ai.AIResponseValidator;
 import com.stockpulse.ai.LLMGateway;
 import com.stockpulse.ai.PromptBuilder;
+import com.stockpulse.guardrails.ConfidenceScorer;
+import com.stockpulse.guardrails.GuardrailResult;
+import com.stockpulse.guardrails.PricingPolicyEngine;
+import com.stockpulse.product.Product;
+import com.stockpulse.product.ProductRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
+
+/**
+ * Production AI Commerce Advisor Architecture:
+ * 1. Deterministic calculation computes numerical prices and quantities mathematically.
+ * 2. PricingPolicyEngine enforces margin floors, category caps, cooldowns, and MOQ.
+ * 3. ConfidenceScorer computes system confidence mathematically.
+ * 4. LLM provides contextual explanation for the validated numbers.
+ */
 @Component("ai")
 public class AICommerceAdvisor implements CommerceAdvisor {
 
@@ -19,51 +33,111 @@ public class AICommerceAdvisor implements CommerceAdvisor {
     private final AIResponseParser parser;
     private final AIResponseValidator validator;
     private final RuleBasedCommerceAdvisor fallback;
+    private final DeterministicCommerceCalculator calculator;
+    private final PricingPolicyEngine policyEngine;
+    private final ConfidenceScorer confidenceScorer;
+    private final ProductRepository productRepository;
 
     public AICommerceAdvisor(@Qualifier("qwen") LLMGateway llmGateway,
                               PromptBuilder promptBuilder,
                               AIResponseParser parser,
                               AIResponseValidator validator,
-                              RuleBasedCommerceAdvisor fallback) {
+                              RuleBasedCommerceAdvisor fallback,
+                              DeterministicCommerceCalculator calculator,
+                              PricingPolicyEngine policyEngine,
+                              ConfidenceScorer confidenceScorer,
+                              ProductRepository productRepository) {
         this.llmGateway = llmGateway;
         this.promptBuilder = promptBuilder;
         this.parser = parser;
         this.validator = validator;
         this.fallback = fallback;
+        this.calculator = calculator;
+        this.policyEngine = policyEngine;
+        this.confidenceScorer = confidenceScorer;
+        this.productRepository = productRepository;
     }
 
     @Override
-    public CommerceRecommendation advise(ProductContext product, TriggerContext trigger) {
+    public CommerceRecommendation advise(ProductContext productCtx, TriggerContext trigger) {
         try {
-            String prompt = promptBuilder.build(product, trigger);
-            String raw = llmGateway.call(prompt);
-            AIResponseParser.CommerceRecommendation parsed = parser.parse(raw);
-            CommerceRecommendation recommendation = toCommerceRecommendation(parsed);
-            validator.validate(recommendation, product.getCurrentPrice());
+            Product product = productRepository.findById(productCtx.getProductId()).orElse(null);
+
+            // Step 1: Deterministic Mathematical Calculation
+            CommerceRecommendation calculatedRec = calculator.calculate(productCtx, trigger, product != null ? product : toFallbackProduct(productCtx));
+
+            // Step 2: Enforce Business Guardrails
+            GuardrailResult guardrails = policyEngine.validateAndEnforce(
+                    product != null ? product : toFallbackProduct(productCtx),
+                    calculatedRec.getPricing().getRecommendedPrice(),
+                    calculatedRec.getReorder().getRecommendedQuantity()
+            );
+
+            // Step 3: Compute System Confidence Mathematically
+            double confidence = confidenceScorer.calculateSystemConfidence(
+                    product != null ? product : toFallbackProduct(productCtx),
+                    guardrails
+            );
+
+            // Step 4: Optional LLM Explanation Layer
+            String aiReasoning = getAiExplanationOrDefault(productCtx, trigger, calculatedRec.getPricing().getReasoning());
+
+            String guardrailsNote = guardrails.getAppliedRules().isEmpty()
+                    ? ""
+                    : " [Guardrails Applied: " + String.join("; ", guardrails.getAppliedRules()) + "]";
+
+            PricingRecommendation pricing = PricingRecommendation.builder()
+                    .recommendedPrice(guardrails.getValidatedPrice())
+                    .direction(calculatedRec.getPricing().getDirection())
+                    .confidence(confidence)
+                    .reasoning(aiReasoning + guardrailsNote)
+                    .build();
+
+            ReorderRecommendation reorder = ReorderRecommendation.builder()
+                    .recommendedQuantity(guardrails.getValidatedQuantity())
+                    .suggestedLeadTimeDays(calculatedRec.getReorder().getSuggestedLeadTimeDays())
+                    .confidence(confidence)
+                    .reasoning(calculatedRec.getReorder().getReasoning())
+                    .build();
+
+            CommerceRecommendation recommendation = CommerceRecommendation.builder()
+                    .pricing(pricing)
+                    .reorder(reorder)
+                    .build();
+
+            validator.validate(recommendation, productCtx.getCurrentPrice());
             return recommendation;
+
         } catch (Exception e) {
-            log.warn("AI advisor failed for product {} ({}), falling back to rule-based: {}",
-                    product, trigger, e.getMessage());
-            return fallback.advise(product, trigger);
+            log.warn("AI advisor fallback triggered for product {} ({}): {}",
+                    productCtx.getProductId(), trigger.getReason(), e.getMessage());
+            return fallback.advise(productCtx, trigger);
         }
     }
 
-    private CommerceRecommendation toCommerceRecommendation(AIResponseParser.CommerceRecommendation parsed) {
+    private String getAiExplanationOrDefault(ProductContext productCtx, TriggerContext trigger, String defaultReasoning) {
         try {
-            for (java.lang.reflect.Constructor<?> constructor : CommerceRecommendation.class.getConstructors()) {
-                java.lang.reflect.Parameter[] parameters = constructor.getParameters();
-                java.lang.reflect.RecordComponent[] components = parsed.getClass().getRecordComponents();
-                if (components != null && parameters.length == components.length) {
-                    Object[] values = new Object[components.length];
-                    for (int i = 0; i < components.length; i++) {
-                        values[i] = components[i].getAccessor().invoke(parsed);
-                    }
-                    return (CommerceRecommendation) constructor.newInstance(values);
-                }
+            String prompt = promptBuilder.build(productCtx, trigger);
+            String raw = llmGateway.call(prompt);
+            AIResponseParser.CommerceRecommendation parsed = parser.parse(raw);
+            if (parsed != null && parsed.getPricing() != null && parsed.getPricing().getReasoning() != null) {
+                return parsed.getPricing().getReasoning();
             }
-            throw new IllegalStateException("No compatible CommerceRecommendation constructor");
-        } catch (ReflectiveOperationException e) {
-            throw new IllegalStateException("Unable to convert AI recommendation", e);
+        } catch (Exception e) {
+            log.debug("LLM explanation call skipped or failed, using deterministic reasoning: {}", e.getMessage());
         }
+        return defaultReasoning;
+    }
+
+    private Product toFallbackProduct(ProductContext p) {
+        return Product.builder()
+                .id(p.getProductId())
+                .name(p.getName())
+                .category(p.getCategory())
+                .currentPrice(p.getCurrentPrice())
+                .stockLevel(p.getStockLevel())
+                .reorderThreshold(p.getReorderThreshold())
+                .demandVelocity(p.getDemandVelocity())
+                .build();
     }
 }

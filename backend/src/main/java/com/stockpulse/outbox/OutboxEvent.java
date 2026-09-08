@@ -36,6 +36,10 @@ public class OutboxEvent {
     @Builder.Default
     private int retryCount = 0;
 
+    private String lockedBy;
+    private Instant lockedAt;
+    private Instant leaseExpiry;
+
     @Column(nullable = false)
     @Builder.Default
     private Instant createdAt = Instant.now();

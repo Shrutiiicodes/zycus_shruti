@@ -1,7 +1,28 @@
 # StockPulse — AI Inventory & Dynamic Pricing Platform
 
-> **Production-Grade Enterprise Architecture**  
+> **Production-Inspired Enterprise Architecture Prototype**  
 > A reactive commerce advisor that automatically detects inventory threshold drops and demand velocity spikes, uses a deterministic optimization engine and business guardrails to calculate prices and reorder quantities, leverages LLMs for contextual explanations, and surfaces complete audit trails to merchandising.
+
+---
+
+## 📐 System Architecture Diagram
+
+```mermaid
+flowchart TD
+    A[Order / Inventory Event] --> B[Transactional Inventory Service]
+    B -->|Optimistic Locking @Version| C[(Product Database)]
+    B -->|Transactional Outbox| D[(OutboxEvent Table)]
+    D --> E[Outbox Worker / Lease Claiming]
+    E --> F[Demand Forecast & Signal Detection]
+    F --> G[Deterministic Commerce Calculator]
+    G --> H[Pricing Policy Engine Guardrails]
+    H --> I[Recommendation Reliability Scorer]
+    I --> J[LLM Contextual Explanation Layer]
+    J --> K[Pending Suggestion & Audit Snapshot]
+    K --> L{Human Merchandiser Approval}
+    L -->|Accept Pricing| M[Price Update & PriceHistory Audit]
+    L -->|Accept Reorder| N[Purchase Order Workflow & InventoryTransaction Audit]
+```
 
 ---
 
@@ -21,7 +42,7 @@ cd backend
 mvnw spring-boot:run
 ```
 
-*The backend starts on `http://localhost:8080` with pre-seeded products in H2 in-memory database (`/h2-console`).*
+*The backend starts on `http://localhost:8080` with pre-seeded products in H2 in-memory database (`/h2-console`). Flyway database migrations run automatically on startup.*
 
 ---
 
@@ -39,57 +60,40 @@ Open `http://localhost:5173` in your browser.
 
 ---
 
-## 💡 Production Architecture & Key Features
+## 💡 Architectural Highlights & Key Upgrades
 
-### 🏛️ 5-Step Execution Pipeline
-```
-  Order / Stock Event
-         │
-         ▼
-  Transactional Inventory Service (Optimistic Locking & Outbox Event)
-         │
-         ▼
-  Outbox Worker (Durable Event Processing)
-         │
-         ▼
-  Deterministic Pricing & Replenishment Optimizer
-         │
-         ▼
-  Business Guardrails Engine (Margin Floors, Category Caps, Cooldowns)
-         │
-         ▼
-  LLM Explanation Layer (Contextual Reasoning for Validated Numbers)
-         │
-         ▼
-  Human Approval / Purchase Order Fulfillment
-```
+### 🔄 Design Evolution (V1 vs V2)
 
-1. **Deterministic Calculation**: Numerical prices and reorder quantities are computed mathematically using expected lead-time demand, safety stock, incoming inventory, and MOQ:
-   $$\text{Reorder Quantity} = \max(\text{MOQ}, \text{LeadTimeDemand} + \text{SafetyStock} - \text{StockOnHand} - \text{IncomingStock})$$
-2. **Business Guardrails Policy Engine (`PricingPolicyEngine`)**:
-   - **Margin Floor**: Enforces $15\%$ minimum margin ($\text{Price} \ge \text{Cost} \times 1.15$).
-   - **Category Increase Caps**: Enforces max $+15\%$ for `ELECTRONICS`, $+20\%$ for `APPAREL`, $+10\%$ for `HOME`.
-   - **Decrease Cap**: Enforces max $-25\%$ price decrease.
-   - **Price Change Cooldown**: Blocks repeated price changes within a 24-hour window.
-   - **Psychological Rounding**: Applies `.99` price endings.
-3. **Mathematical Confidence Scoring (`ConfidenceScorer`)**: Calculates system confidence ($0.0 - 1.0$) based on data completeness, stock scarcity ratio, and policy compliance.
-4. **Realistic Purchase Order Workflow**: Accepting a reorder recommendation creates a `PurchaseOrder` in `CREATED` status and updates `incomingStock`. Ingesting physical shipments (`PATCH /purchase-orders/{id}/receive`) increments physical stock and decrements `incomingStock`.
-5. **Complete Enterprise Auditability**: `PriceHistory`, `InventoryTransaction`, and `RecommendationAudit` telemetry logs all pricing changes, inventory movements, system confidence, and decision trails.
-6. **Transactional Outbox Pattern**: `OutboxEvent` & `@Scheduled` `OutboxWorker` process signal triggers reliably without in-memory event loss across JVM restarts.
+| Dimension | Version 1 (Hackathon Baseline) | Version 2 (Production-Inspired Engine) |
+| :--- | :--- | :--- |
+| **Numerical Source** | LLM invented pricing & reorder numbers | **Deterministic formulas & forecast calculators** compute exact numbers |
+| **Business Guardrails** | Simple max 5x current price check | **`PricingPolicyEngine`**: Margin floors (15%), Category caps (+15%/+20%), 24h Cooldowns |
+| **Confidence Scoring** | Uncalibrated LLM number | **Mathematical `ReliabilityScore`** based on data completeness & signal strength |
+| **Event Reliability** | In-memory Spring events (lost on crash) | **Transactional Outbox Pattern** (`OutboxEvent` table + worker leasing) |
+| **Concurrency** | Unprotected stock updates | **JPA `@Version` Optimistic Locking** (prevents overselling) |
+| **Reorder Fulfillment** | Instant physical stock inflation | **`PurchaseOrder` workflow** (`incomingStock` $\rightarrow$ goods receipt) |
+| **Auditability** | None | Full audit trails for `PriceHistory`, `InventoryTransaction`, and `RecommendationAudit` |
 
 ---
 
-## 🎯 Live Demo Walkthrough
+## 🛠️ Failure Modes & Resilience Matrix
 
-1. **Merchandising Console**:
-   - Observe `PRD-003` (*Organic Cotton T-Shirt*), pre-seeded with low stock (8 units vs 15 threshold).
-   - Click **"+ Add Product"** to add any new item dynamically.
-   - Click **"Simulate Sale"** on `PRD-008` (*Hoodie*) to trigger demand velocity spike recommendations.
-2. **Purchase Orders & Fulfillment Tab**:
-   - Click **Accept** on a reorder recommendation $\rightarrow$ a Purchase Order is created in `CREATED` status with `incomingStock` updated.
-   - Click **"Receive Shipment"** $\rightarrow$ physical stock increments, incoming stock decrements, and an `InventoryTransaction` is logged.
-3. **Audit Trails & History Tab**:
-   - Inspect historical logs for **Price History**, **Inventory Transactions**, and **Recommendation Audits**.
+| Failure Mode | System Behavior & Mitigation |
+| :--- | :--- |
+| **LLM Gateway Timeout / Unavailability** | Instantly falls back to deterministic rule reasoning (`AICommerceAdvisor` fallback pipeline). |
+| **Worker Instance Crash** | Outbox worker lease expires after 30 seconds; another instance automatically claims the pending event. |
+| **Concurrent Customer Orders** | Optimistic locking (`@Version`) throws `OptimisticLockingFailureException` and rolls back overcommitted stock. |
+| **Duplicate Trigger Events** | Database-level unique indexes on `(product_id, trigger_reason, status)` prevent duplicate `PENDING` suggestions. |
+| **Invalid Proposed Price** | `PricingPolicyEngine` clamps price within margin floors and category caps. |
+
+---
+
+## ⚠️ Known Limitations & Production Roadmap
+
+- **Storage Engine**: Configured for development using **H2 in-memory DB**. For production deployments, activate the PostgreSQL profile (`spring.profiles.active=prod`).
+- **Distributed Worker Locking**: Current outbox event leasing uses database timestamps (`lockedBy`, `leaseExpiry`). High-throughput clusters should migrate to Redis (`ShedLock`) or Kafka/RabbitMQ.
+- **Authentication & RBAC**: Currently operates in single-tenant merchandising mode. Role-based access control (`ADMIN`, `MERCHANDISER`, `VIEWER`) is planned for Sprint 2 enterprise integration.
+- **Observability**: Metrics collection via Micrometer / Prometheus / Grafana is recommended for tracking queue latency and LLM fallback rates.
 
 ---
 
@@ -98,7 +102,7 @@ Open `http://localhost:5173` in your browser.
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
 | `GET` | `/api/products` | Retrieve catalog with status and category filters |
-| `POST` | `/api/products` | Create a new product |
+| `POST` | `/api/products` | Create a new product dynamically |
 | `PATCH` | `/api/products/{id}/stock` | Update stock level (logs transaction & fires outbox trigger) |
 | `POST` | `/api/products/{id}/orders` | Simulate an order sale (decrements stock & bumps velocity) |
 | `POST` | `/api/products/{id}/suggest-pricing` | On-demand pricing recommendation |

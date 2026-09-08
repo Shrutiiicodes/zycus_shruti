@@ -17,13 +17,13 @@ export default function SuggestionCard({ type, suggestion, onDecide, deciding })
 
       {isPricing ? (
         <div style={{ fontSize: '14px', marginBottom: '6px' }}>
-          {suggestion.currentPrice} → <strong>{suggestion.recommendedPrice}</strong>{' '}
-          <span style={{ color: '#6b7280' }}>({suggestion.direction}, confidence {suggestion.confidence.toFixed(2)})</span>
+          ${suggestion.currentPrice.toFixed(2)} → <strong>${suggestion.recommendedPrice.toFixed(2)}</strong>{' '}
+          <span style={{ color: '#6b7280' }}>({suggestion.direction}, Reliability Score: {Math.round(suggestion.confidence * 100)}%)</span>
         </div>
       ) : (
         <div style={{ fontSize: '14px', marginBottom: '6px' }}>
           Reorder <strong>{suggestion.recommendedQuantity} units</strong>{' '}
-          <span style={{ color: '#6b7280' }}>(lead time {suggestion.suggestedLeadTimeDays}d, confidence {suggestion.confidence.toFixed(2)})</span>
+          <span style={{ color: '#6b7280' }}>(lead time {suggestion.suggestedLeadTimeDays}d, Reliability Score: {Math.round(suggestion.confidence * 100)}%)</span>
         </div>
       )}
 

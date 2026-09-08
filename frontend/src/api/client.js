@@ -15,6 +15,8 @@ async function request(path, options = {}) {
 
 export const api = {
   listProducts: () => request('/products'),
+  createProduct: (data) =>
+    request('/products', { method: 'POST', body: JSON.stringify(data) }),
   placeOrder: (id, quantity = 1) =>
     request(`/products/${id}/orders`, { method: 'POST', body: JSON.stringify({ quantity }) }),
   updateStock: (id, stockLevel) =>

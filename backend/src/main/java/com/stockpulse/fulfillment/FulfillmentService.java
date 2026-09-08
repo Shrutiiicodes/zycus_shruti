@@ -66,6 +66,9 @@ public class FulfillmentService {
         if (po.getStatus() == POStatus.RECEIVED) {
             throw new IllegalStateException("Purchase Order " + poId + " has already been received.");
         }
+        if (po.getStatus() == POStatus.CANCELLED) {
+            throw new IllegalStateException("Cannot receive shipment for a CANCELLED Purchase Order " + poId);
+        }
 
         Product product = productRepository.findById(po.getProductId())
                 .orElseThrow(() -> new NoSuchElementException("Product not found: " + po.getProductId()));
@@ -85,6 +88,39 @@ public class FulfillmentService {
                 product.getStockLevel(),
                 TransactionType.SHIPMENT_RECEIVED,
                 "PO-" + savedPo.getId()
+        );
+
+        return savedPo;
+    }
+
+    @Transactional
+    public PurchaseOrder cancelPurchaseOrder(Long poId) {
+        PurchaseOrder po = purchaseOrderRepository.findById(poId)
+                .orElseThrow(() -> new NoSuchElementException("Purchase Order not found: " + poId));
+
+        if (po.getStatus() == POStatus.RECEIVED) {
+            throw new IllegalStateException("Cannot cancel a Purchase Order that has already been RECEIVED.");
+        }
+        if (po.getStatus() == POStatus.CANCELLED) {
+            throw new IllegalStateException("Purchase Order " + poId + " is already CANCELLED.");
+        }
+
+        Product product = productRepository.findById(po.getProductId())
+                .orElseThrow(() -> new NoSuchElementException("Product not found: " + po.getProductId()));
+
+        // Decrement incomingStock because inventory is no longer arriving
+        product.setIncomingStock(Math.max(0, product.getIncomingStock() - po.getQuantityOrdered()));
+        productRepository.save(product);
+
+        po.setStatus(POStatus.CANCELLED);
+        PurchaseOrder savedPo = purchaseOrderRepository.save(po);
+
+        auditService.recordInventoryTransaction(
+                product.getId(),
+                -po.getQuantityOrdered(),
+                product.getStockLevel(),
+                TransactionType.STOCK_ADJUSTMENT,
+                "PO-CANCELLED-" + savedPo.getId()
         );
 
         return savedPo;

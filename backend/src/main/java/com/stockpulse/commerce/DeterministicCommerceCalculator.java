@@ -28,7 +28,10 @@ public class DeterministicCommerceCalculator {
         int moq = product.getMinimumOrderQuantity() > 0 ? product.getMinimumOrderQuantity() : 25;
 
         int rawReorderQty = (leadTimeDemand + safetyStock) - (currentStock + incomingStock);
-        int calculatedQuantity = Math.max(moq, Math.max(0, rawReorderQty));
+        int calculatedQuantity = rawReorderQty <= 0 ? 0 : Math.max(moq, rawReorderQty);
+        String reorderReasoning = calculatedQuantity == 0
+                ? "Current inventory (" + (currentStock + incomingStock) + ") satisfies lead-time demand (" + leadTimeDemand + ") and safety stock (" + safetyStock + "); no reorder required."
+                : "Calculated based on expected lead-time demand (" + leadTimeDemand + " units) + safety stock (" + safetyStock + ") minus stock on hand/in-transit (" + (currentStock + incomingStock) + "), floored at MOQ (" + moq + ").";
 
         // --- 2. Deterministic Pricing Calculation ---
         BigDecimal currentPrice = p.getCurrentPrice();
@@ -59,7 +62,7 @@ public class DeterministicCommerceCalculator {
                         .recommendedQuantity(calculatedQuantity)
                         .suggestedLeadTimeDays(product.getLeadTimeDays() > 0 ? product.getLeadTimeDays() : 7)
                         .confidence(0.85)
-                        .reasoning("Calculated based on expected lead-time demand (" + leadTimeDemand + " units) + safety stock (" + safetyStock + ") minus stock on hand/in-transit (" + (currentStock + incomingStock) + "), floored at MOQ (" + moq + ").")
+                        .reasoning(reorderReasoning)
                         .build())
                 .build();
     }

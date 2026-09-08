@@ -6,6 +6,7 @@ import com.stockpulse.product.ProductRepository;
 import com.stockpulse.recommendation.TriggerReason;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,38 +35,66 @@ public class OutboxWorker {
     }
 
     @Scheduled(fixedDelay = 3000)
-    @Transactional
     public void processPendingEvents() {
         Instant now = Instant.now();
-        List<OutboxEvent> claimableEvents = outboxRepository.findClaimableEvents("PENDING", now);
-        if (claimableEvents.isEmpty()) return;
+        List<OutboxEvent> candidates = outboxRepository.findClaimableEvents("PENDING", now, PageRequest.of(0, 10));
+        if (candidates.isEmpty()) return;
 
-        for (OutboxEvent event : claimableEvents) {
-            // Multi-instance Event Claiming with Lease
-            event.setLockedBy(workerId);
-            event.setLockedAt(now);
-            event.setLeaseExpiry(now.plus(30, ChronoUnit.SECONDS));
-            outboxRepository.save(event);
+        for (OutboxEvent candidate : candidates) {
+            // Phase 1: Atomic Database Claim
+            boolean claimed = claimEventAtomically(candidate.getId(), now);
+            if (!claimed) {
+                continue; // Claimed by another concurrent worker instance
+            }
 
+            // Phase 2: Compute suggestions & AI explanations without long DB lock
             try {
-                Product product = productRepository.findById(event.getAggregateId()).orElse(null);
+                Product product = productRepository.findById(candidate.getAggregateId()).orElse(null);
                 if (product != null) {
-                    TriggerReason reason = TriggerReason.valueOf(event.getEventType());
+                    TriggerReason reason = TriggerReason.valueOf(candidate.getEventType());
                     commerceEngineService.generateSuggestions(product, reason);
                 }
-                event.setStatus("PROCESSED");
-                event.setProcessedAt(Instant.now());
-                event.setLockedBy(null);
+                markProcessed(candidate.getId());
             } catch (Exception e) {
-                log.error("Worker {} failed to process outbox event {}: {}", workerId, event.getId(), e.getMessage());
-                event.setRetryCount(event.getRetryCount() + 1);
-                event.setLockedBy(null);
-                if (event.getRetryCount() >= 3) {
-                    event.setStatus("FAILED");
-                }
+                log.error("Worker {} failed to process outbox event {}: {}", workerId, candidate.getId(), e.getMessage());
+                markFailed(candidate.getId(), e.getMessage());
+            }
+        }
+    }
+
+    @Transactional
+    public boolean claimEventAtomically(Long eventId, Instant now) {
+        Instant leaseExpiry = now.plus(30, ChronoUnit.SECONDS);
+        int rowsUpdated = outboxRepository.claimEvent(eventId, workerId, now, leaseExpiry);
+        return rowsUpdated == 1;
+    }
+
+    @Transactional
+    public void markProcessed(Long eventId) {
+        outboxRepository.findById(eventId).ifPresent(event -> {
+            event.setStatus("PROCESSED");
+            event.setProcessedAt(Instant.now());
+            event.setLockedBy(null);
+            event.setLastError(null);
+            outboxRepository.save(event);
+        });
+    }
+
+    @Transactional
+    public void markFailed(Long eventId, String errorMessage) {
+        outboxRepository.findById(eventId).ifPresent(event -> {
+            event.setRetryCount(event.getRetryCount() + 1);
+            event.setLockedBy(null);
+            if (errorMessage != null && errorMessage.length() > 2000) {
+                event.setLastError(errorMessage.substring(0, 1997) + "...");
+            } else {
+                event.setLastError(errorMessage);
+            }
+            if (event.getRetryCount() >= 3) {
+                event.setStatus("FAILED");
             }
             outboxRepository.save(event);
-        }
+        });
     }
 
     public String getWorkerId() {

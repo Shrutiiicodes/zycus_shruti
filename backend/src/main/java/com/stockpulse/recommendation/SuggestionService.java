@@ -44,6 +44,16 @@ public class SuggestionService {
 
         Product product = suggestion.getProduct();
         if (accept) {
+            // Stale Recommendation Protection: verify current product price matches suggestion snapshot
+            if (product.getCurrentPrice().compareTo(suggestion.getCurrentPrice()) != 0) {
+                suggestion.setStatus(SuggestionStatus.EXPIRED);
+                pricingSuggestionRepository.save(suggestion);
+                clearPriceReviewIfNoOtherPendingPricing(product);
+                productRepository.save(product);
+                throw new IllegalStateException("Suggestion is stale: product price has changed from "
+                        + suggestion.getCurrentPrice() + " to " + product.getCurrentPrice() + ". Please regenerate.");
+            }
+
             BigDecimal oldPrice = product.getCurrentPrice();
             product.applyPriceChange(suggestion.getRecommendedPrice());
             suggestion.setStatus(SuggestionStatus.ACCEPTED);
@@ -78,6 +88,8 @@ public class SuggestionService {
         } else {
             suggestion.setStatus(SuggestionStatus.REJECTED);
             PricingSuggestion saved = pricingSuggestionRepository.save(suggestion);
+            clearPriceReviewIfNoOtherPendingPricing(product);
+            productRepository.save(product);
 
             auditService.recordRecommendationAudit(
                     product.getId(),

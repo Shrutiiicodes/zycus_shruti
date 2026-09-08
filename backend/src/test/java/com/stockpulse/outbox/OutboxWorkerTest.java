@@ -11,6 +11,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import org.springframework.data.domain.Pageable;
+
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
@@ -19,6 +21,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -57,14 +60,16 @@ class OutboxWorkerTest {
                 .status(ProductStatus.ACTIVE)
                 .build();
 
-        when(outboxRepository.findClaimableEvents(eq("PENDING"), any(Instant.class)))
+        when(outboxRepository.findClaimableEvents(eq("PENDING"), any(Instant.class), any(Pageable.class)))
                 .thenReturn(List.of(event));
+        when(outboxRepository.claimEvent(eq(100L), any(), any(Instant.class), any(Instant.class))).thenReturn(1);
         when(productRepository.findById("PRD-001")).thenReturn(Optional.of(product));
+        when(outboxRepository.findById(100L)).thenReturn(Optional.of(event));
 
         outboxWorker.processPendingEvents();
 
         assertEquals("PROCESSED", event.getStatus());
         assertNotNull(event.getProcessedAt());
-        assertNull(event.getLockedBy()); // Released after completion
+        assertNull(event.getLockedBy());
     }
 }

@@ -45,4 +45,7 @@ public class OutboxEvent {
     private Instant createdAt = Instant.now();
 
     private Instant processedAt;
+
+    @Column(length = 2000)
+    private String lastError;
 }

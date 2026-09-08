@@ -23,4 +23,9 @@ public class PurchaseOrderController {
     public PurchaseOrder receiveShipment(@PathVariable Long id) {
         return fulfillmentService.receiveShipment(id);
     }
+
+    @PatchMapping("/{id}/cancel")
+    public PurchaseOrder cancelPurchaseOrder(@PathVariable Long id) {
+        return fulfillmentService.cancelPurchaseOrder(id);
+    }
 }

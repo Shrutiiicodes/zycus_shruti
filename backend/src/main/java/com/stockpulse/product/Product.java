@@ -84,7 +84,13 @@ public class Product {
     }
 
     public void decrementStock(int quantity) {
-        this.stockLevel = Math.max(0, this.stockLevel - quantity);
+        if (quantity <= 0) {
+            throw new IllegalArgumentException("Quantity must be positive");
+        }
+        if (quantity > stockLevel) {
+            throw new IllegalStateException("Insufficient stock: requested " + quantity + ", available " + stockLevel);
+        }
+        this.stockLevel -= quantity;
         recomputeLifecycleFromStock();
     }
 

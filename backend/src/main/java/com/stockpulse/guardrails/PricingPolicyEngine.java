@@ -27,11 +27,11 @@ public class PricingPolicyEngine {
             long hoursSinceLastChange = Duration.between(product.getLastPriceChangeTimestamp(), Instant.now()).toHours();
             if (hoursSinceLastChange < COOLDOWN_HOURS) {
                 cooldownActive = true;
-                rulesApplied.add("Price cooldown active (last change " + hoursSinceLastChange + "h ago < " + COOLDOWN_HOURS + "h window)");
+                rulesApplied.add("Price cooldown active (last change " + hoursSinceLastChange + "h ago < " + COOLDOWN_HOURS + "h window): price change blocked.");
             }
         }
 
-        BigDecimal adjustedPrice = proposedPrice;
+        BigDecimal adjustedPrice = cooldownActive ? product.getCurrentPrice() : proposedPrice;
 
         // 2. Margin Floor Enforcement
         BigDecimal cost = product.getCostPrice() != null ? product.getCostPrice() : product.getCurrentPrice().multiply(new BigDecimal("0.60"));

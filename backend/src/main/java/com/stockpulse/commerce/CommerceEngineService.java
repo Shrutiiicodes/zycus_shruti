@@ -70,7 +70,7 @@ public class CommerceEngineService {
 
         boolean reorderPending = reorderSuggestionRepository
                 .existsByProduct_IdAndTriggerReasonAndStatus(product.getId(), reason, SuggestionStatus.PENDING);
-        if (!reorderPending) {
+        if (!reorderPending && recommendation.getReorder().getRecommendedQuantity() > 0) {
             ReorderSuggestion saved = reorderSuggestionRepository.save(ReorderSuggestion.builder()
                     .product(product)
                     .currentStock(product.getStockLevel())

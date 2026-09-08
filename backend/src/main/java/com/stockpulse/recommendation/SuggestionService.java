@@ -2,6 +2,8 @@ package com.stockpulse.recommendation;
 
 import com.stockpulse.audit.AuditService;
 import com.stockpulse.fulfillment.FulfillmentService;
+import com.stockpulse.guardrails.GuardrailResult;
+import com.stockpulse.guardrails.PricingPolicyEngine;
 import com.stockpulse.product.Product;
 import com.stockpulse.product.ProductRepository;
 import com.stockpulse.product.ProductStatus;
@@ -23,17 +25,20 @@ public class SuggestionService {
     private final ProductRepository productRepository;
     private final AuditService auditService;
     private final FulfillmentService fulfillmentService;
+    private final PricingPolicyEngine pricingPolicyEngine;
 
     public SuggestionService(PricingSuggestionRepository pricingSuggestionRepository,
                               ReorderSuggestionRepository reorderSuggestionRepository,
                               ProductRepository productRepository,
                               AuditService auditService,
-                              FulfillmentService fulfillmentService) {
+                              FulfillmentService fulfillmentService,
+                              PricingPolicyEngine pricingPolicyEngine) {
         this.pricingSuggestionRepository = pricingSuggestionRepository;
         this.reorderSuggestionRepository = reorderSuggestionRepository;
         this.productRepository = productRepository;
         this.auditService = auditService;
         this.fulfillmentService = fulfillmentService;
+        this.pricingPolicyEngine = pricingPolicyEngine;
     }
 
     @Transactional
@@ -54,8 +59,12 @@ public class SuggestionService {
                         + suggestion.getCurrentPrice() + " to " + product.getCurrentPrice() + ". Please regenerate.");
             }
 
+            // Revalidate Pricing Guardrails against latest product state at acceptance time
+            GuardrailResult guardrailResult = pricingPolicyEngine.validateAndEnforce(product, suggestion.getRecommendedPrice(), 0);
+            BigDecimal finalPrice = guardrailResult.getValidatedPrice();
+
             BigDecimal oldPrice = product.getCurrentPrice();
-            product.applyPriceChange(suggestion.getRecommendedPrice());
+            product.applyPriceChange(finalPrice);
             suggestion.setStatus(SuggestionStatus.ACCEPTED);
             pricingSuggestionRepository.save(suggestion);
             clearPriceReviewIfNoOtherPendingPricing(product);
@@ -64,7 +73,7 @@ public class SuggestionService {
             auditService.recordPriceChange(
                     product.getId(),
                     oldPrice,
-                    suggestion.getRecommendedPrice(),
+                    finalPrice,
                     "MERCHANDISER",
                     suggestion.getReasoning(),
                     suggestion.getId()
@@ -75,7 +84,7 @@ public class SuggestionService {
                     "PRICING",
                     "COMMERCE_ENGINE",
                     suggestion.getTriggerReason(),
-                    suggestion.getRecommendedPrice(),
+                    finalPrice,
                     null,
                     suggestion.getConfidence(),
                     "{}",
@@ -117,6 +126,14 @@ public class SuggestionService {
 
         Product product = suggestion.getProduct();
         if (accept) {
+            // Stale Recommendation Protection for Inventory Reorders
+            if (product.getStockLevel() != suggestion.getCurrentStock()) {
+                suggestion.setStatus(SuggestionStatus.EXPIRED);
+                reorderSuggestionRepository.save(suggestion);
+                throw new IllegalStateException("Suggestion is stale: inventory stock level has changed from "
+                        + suggestion.getCurrentStock() + " to " + product.getStockLevel() + ". Please regenerate.");
+            }
+
             suggestion.setStatus(SuggestionStatus.ACCEPTED);
             ReorderSuggestion saved = reorderSuggestionRepository.save(suggestion);
 

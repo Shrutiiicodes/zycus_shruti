@@ -40,7 +40,10 @@ public class Product {
     @Column(nullable = false)
     private int reorderThreshold;
 
-    /** Orders placed in the last 24h — bumped by /orders, read by rule + AI strategies. */
+    /**
+     * Relative demand signal for prototype comparisons, bumped by simulated orders.
+     * Used for comparative demand spike detection across category peers.
+     */
     @Column(nullable = false)
     private int demandVelocity;
 

@@ -11,8 +11,8 @@ import java.util.Optional;
 
 /**
  * Single place where a Product turns into persisted suggestions.
- * Called synchronously from on-demand endpoints (Phase 2) and asynchronously
- * from the event listener (Phase 4) — same method, same contract either way.
+ * Called synchronously from on-demand endpoints and asynchronously
+ * by the durable OutboxWorker.
  */
 @Service
 public class CommerceEngineService {

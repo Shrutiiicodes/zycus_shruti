@@ -6,6 +6,7 @@ import com.stockpulse.product.Category;
 import com.stockpulse.product.Product;
 import com.stockpulse.product.ProductRepository;
 import com.stockpulse.product.ProductStatus;
+import com.stockpulse.guardrails.PricingPolicyEngine;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -23,6 +24,7 @@ class SuggestionServiceStaleTest {
     private ProductRepository productRepository;
     private AuditService auditService;
     private FulfillmentService fulfillmentService;
+    private PricingPolicyEngine pricingPolicyEngine;
     private SuggestionService suggestionService;
 
     @BeforeEach
@@ -32,13 +34,15 @@ class SuggestionServiceStaleTest {
         productRepository = mock(ProductRepository.class);
         auditService = mock(AuditService.class);
         fulfillmentService = mock(FulfillmentService.class);
+        pricingPolicyEngine = mock(PricingPolicyEngine.class);
 
         suggestionService = new SuggestionService(
                 pricingSuggestionRepository,
                 reorderSuggestionRepository,
                 productRepository,
                 auditService,
-                fulfillmentService
+                fulfillmentService,
+                pricingPolicyEngine
         );
     }
 
@@ -76,5 +80,39 @@ class SuggestionServiceStaleTest {
         assertEquals(SuggestionStatus.EXPIRED, suggestion.getStatus());
         assertEquals(new BigDecimal("150.00"), product.getCurrentPrice()); // Price NOT overwritten to 110!
         verify(pricingSuggestionRepository).save(suggestion);
+    }
+
+    @Test
+    @DisplayName("Should expire reorder suggestion and throw IllegalStateException when stock has changed since generation")
+    void testStaleReorderSuggestionRejection() {
+        Product product = Product.builder()
+                .id("PRD-2")
+                .sku("SKU-2")
+                .name("Stock Item")
+                .category(Category.ELECTRONICS)
+                .stockLevel(50) // Stock changed from 5 to 50
+                .status(ProductStatus.ACTIVE)
+                .build();
+
+        ReorderSuggestion suggestion = ReorderSuggestion.builder()
+                .id(2L)
+                .product(product)
+                .currentStock(5) // Snapshot at generation time
+                .recommendedQuantity(100)
+                .confidence(0.85)
+                .status(SuggestionStatus.PENDING)
+                .triggerReason(TriggerReason.INVENTORY_LOW)
+                .build();
+
+        when(reorderSuggestionRepository.findById(2L)).thenReturn(Optional.of(suggestion));
+
+        IllegalStateException ex = assertThrows(IllegalStateException.class, () ->
+                suggestionService.decideReorder(2L, true)
+        );
+
+        assertTrue(ex.getMessage().contains("stale"));
+        assertEquals(SuggestionStatus.EXPIRED, suggestion.getStatus());
+        verify(reorderSuggestionRepository).save(suggestion);
+        verify(fulfillmentService, never()).createPurchaseOrder(any(), anyInt(), any());
     }
 }

@@ -69,8 +69,8 @@ public class PricingPolicyEngine {
 
         // 6. Quantity Minimum (MOQ)
         int moq = product.getMinimumOrderQuantity() > 0 ? product.getMinimumOrderQuantity() : 25;
-        int adjustedQuantity = Math.max(moq, proposedQuantity);
-        if (adjustedQuantity > proposedQuantity) {
+        int adjustedQuantity = proposedQuantity <= 0 ? 0 : Math.max(moq, proposedQuantity);
+        if (proposedQuantity > 0 && adjustedQuantity > proposedQuantity) {
             rulesApplied.add("Enforced Minimum Order Quantity (MOQ: " + moq + ")");
         }
 

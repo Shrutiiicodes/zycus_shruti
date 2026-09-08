@@ -36,6 +36,9 @@ class OutboxWorkerTest {
     @Mock
     private CommerceEngineService commerceEngineService;
 
+    @Mock
+    private OutboxClaimService outboxClaimService;
+
     @InjectMocks
     private OutboxWorker outboxWorker;
 
@@ -62,14 +65,11 @@ class OutboxWorkerTest {
 
         when(outboxRepository.findClaimableEvents(eq("PENDING"), any(Instant.class), any(Pageable.class)))
                 .thenReturn(List.of(event));
-        when(outboxRepository.claimEvent(eq(100L), any(), any(Instant.class), any(Instant.class))).thenReturn(1);
+        when(outboxClaimService.claimEventAtomically(eq(100L), any(), any(Instant.class))).thenReturn(true);
         when(productRepository.findById("PRD-001")).thenReturn(Optional.of(product));
-        when(outboxRepository.findById(100L)).thenReturn(Optional.of(event));
 
         outboxWorker.processPendingEvents();
 
-        assertEquals("PROCESSED", event.getStatus());
-        assertNotNull(event.getProcessedAt());
-        assertNull(event.getLockedBy());
+        verify(outboxClaimService).markProcessed(100L);
     }
 }

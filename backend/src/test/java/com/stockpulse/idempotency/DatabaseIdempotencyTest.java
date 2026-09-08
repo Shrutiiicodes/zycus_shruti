@@ -42,6 +42,7 @@ class DatabaseIdempotencyTest {
                 .stockLevel(5)
                 .reorderThreshold(10)
                 .demandVelocity(0)
+                .status(com.stockpulse.product.ProductStatus.ACTIVE)
                 .build();
         productRepository.save(p);
 

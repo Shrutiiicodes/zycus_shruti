@@ -27,6 +27,8 @@ public class PricingSuggestion {
     @Column(nullable = false)
     private BigDecimal currentPrice;
 
+    private Long productVersion;
+
     @Column(nullable = false)
     private BigDecimal recommendedPrice;
 

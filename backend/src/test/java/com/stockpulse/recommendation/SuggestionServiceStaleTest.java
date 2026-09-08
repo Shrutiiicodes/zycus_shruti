@@ -91,6 +91,8 @@ class SuggestionServiceStaleTest {
                 .name("Stock Item")
                 .category(Category.ELECTRONICS)
                 .stockLevel(50) // Stock changed from 5 to 50
+                .incomingStock(0)
+                .version(10L)
                 .status(ProductStatus.ACTIVE)
                 .build();
 
@@ -98,6 +100,8 @@ class SuggestionServiceStaleTest {
                 .id(2L)
                 .product(product)
                 .currentStock(5) // Snapshot at generation time
+                .incomingStock(0)
+                .productVersion(10L)
                 .recommendedQuantity(100)
                 .confidence(0.85)
                 .status(SuggestionStatus.PENDING)
@@ -108,6 +112,44 @@ class SuggestionServiceStaleTest {
 
         IllegalStateException ex = assertThrows(IllegalStateException.class, () ->
                 suggestionService.decideReorder(2L, true)
+        );
+
+        assertTrue(ex.getMessage().contains("stale"));
+        assertEquals(SuggestionStatus.EXPIRED, suggestion.getStatus());
+        verify(reorderSuggestionRepository).save(suggestion);
+        verify(fulfillmentService, never()).createPurchaseOrder(any(), anyInt(), any());
+    }
+
+    @Test
+    @DisplayName("Should expire reorder suggestion when incomingStock or version has changed since generation")
+    void testStaleReorderIncomingStockChange() {
+        Product product = Product.builder()
+                .id("PRD-3")
+                .sku("SKU-3")
+                .name("In Transit Item")
+                .category(Category.ELECTRONICS)
+                .stockLevel(5)
+                .incomingStock(100) // PO was placed, incoming changed 0 -> 100
+                .version(11L)
+                .status(ProductStatus.ACTIVE)
+                .build();
+
+        ReorderSuggestion suggestion = ReorderSuggestion.builder()
+                .id(3L)
+                .product(product)
+                .currentStock(5)
+                .incomingStock(0) // Snapshot at 10:00 AM
+                .productVersion(10L)
+                .recommendedQuantity(100)
+                .confidence(0.85)
+                .status(SuggestionStatus.PENDING)
+                .triggerReason(TriggerReason.INVENTORY_LOW)
+                .build();
+
+        when(reorderSuggestionRepository.findById(3L)).thenReturn(Optional.of(suggestion));
+
+        IllegalStateException ex = assertThrows(IllegalStateException.class, () ->
+                suggestionService.decideReorder(3L, true)
         );
 
         assertTrue(ex.getMessage().contains("stale"));

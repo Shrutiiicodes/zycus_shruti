@@ -26,6 +26,12 @@ public class ReorderSuggestion {
     @Column(nullable = false)
     private int currentStock;
 
+    @Builder.Default
+    @Column(columnDefinition = "int default 0")
+    private int incomingStock = 0;
+
+    private Long productVersion;
+
     @Column(nullable = false)
     private int recommendedQuantity;
 

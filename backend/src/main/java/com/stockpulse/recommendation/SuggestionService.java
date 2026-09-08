@@ -49,14 +49,15 @@ public class SuggestionService {
 
         Product product = suggestion.getProduct();
         if (accept) {
-            // Stale Recommendation Protection: verify current product price matches suggestion snapshot
-            if (product.getCurrentPrice().compareTo(suggestion.getCurrentPrice()) != 0) {
+            // Stale Recommendation Protection: verify product price and entity version
+            boolean priceChanged = product.getCurrentPrice().compareTo(suggestion.getCurrentPrice()) != 0;
+            boolean versionChanged = suggestion.getProductVersion() != null && !suggestion.getProductVersion().equals(product.getVersion());
+            if (priceChanged || versionChanged) {
                 suggestion.setStatus(SuggestionStatus.EXPIRED);
                 pricingSuggestionRepository.save(suggestion);
                 clearPriceReviewIfNoOtherPendingPricing(product);
                 productRepository.save(product);
-                throw new IllegalStateException("Suggestion is stale: product price has changed from "
-                        + suggestion.getCurrentPrice() + " to " + product.getCurrentPrice() + ". Please regenerate.");
+                throw new IllegalStateException("Pricing suggestion is stale because product price or version has changed. Please regenerate.");
             }
 
             // Revalidate Pricing Guardrails against latest product state at acceptance time
@@ -126,12 +127,15 @@ public class SuggestionService {
 
         Product product = suggestion.getProduct();
         if (accept) {
-            // Stale Recommendation Protection for Inventory Reorders
-            if (product.getStockLevel() != suggestion.getCurrentStock()) {
+            // Stale Recommendation Protection for Inventory Reorders (stockLevel, incomingStock, and productVersion)
+            boolean stockChanged = product.getStockLevel() != suggestion.getCurrentStock();
+            boolean incomingStockChanged = product.getIncomingStock() != suggestion.getIncomingStock();
+            boolean versionChanged = suggestion.getProductVersion() != null && !suggestion.getProductVersion().equals(product.getVersion());
+
+            if (stockChanged || incomingStockChanged || versionChanged) {
                 suggestion.setStatus(SuggestionStatus.EXPIRED);
                 reorderSuggestionRepository.save(suggestion);
-                throw new IllegalStateException("Suggestion is stale: inventory stock level has changed from "
-                        + suggestion.getCurrentStock() + " to " + product.getStockLevel() + ". Please regenerate.");
+                throw new IllegalStateException("Reorder suggestion is stale because inventory state (stock/incoming) or version has changed. Please regenerate.");
             }
 
             suggestion.setStatus(SuggestionStatus.ACCEPTED);
